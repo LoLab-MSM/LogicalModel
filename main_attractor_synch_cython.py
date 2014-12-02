@@ -6,7 +6,7 @@ Created on Mon Sep 29 16:55:23 2014
 
 """
 
-#import pypar
+
 from numpy import *
 import itertools
 from itertools import combinations_with_replacement
@@ -26,19 +26,21 @@ parser.add_argument("-s","--start",type=str,help='starting string to convert to 
 parser.add_argument("-e","--end",type=str,help='ending string to convert to based Nstates')
 parser.add_argument("-f","--function",type=str,help='function to run simulation on')
 parser.add_argument("-v","--verbose",type=str,help='if you want verbose updates (use with single processor)')
+parser.add_argument("-p","--parallel",type=str,help='run in pareallel')
 args = parser.parse_args()
 numStates=int(args.numberstates)
 numNodes = int(args.numbernodes)
 start = int(args.start)
 end = int(args.end)
 Function = str(args.function)
-print Function
+parallel = int(args.parallel)
 v = int(args.verbose)
 samplesize = int(end) - int(start)
 Function = __import__(Function)
 function = Function.function
 #print samplesize
-
+if parallel == True:
+    import pypar
 totalStates = int(numStates) ** (1.*int(numNodes))
 
 
@@ -108,90 +110,93 @@ def main():
             data[tmp]=1
     print 'time of '+str(samplesize)+' calculations '+ str((time.time() - start_time)/60)+' minutes'
     print data
-main()
+if parallel == False:
+    print "Running on single CPU"
+    main()
+if parallel == True:
 
-# For parallel usage on a cluster or multi core computer uncomment below
-# and comment main() above.
-# Must have pypar installed, uses a "stepping" of 100, which means splits up
-# the job in batches of 100 over the processors
-"""
-#Initialise
-t = pypar.time()
-P = pypar.size()
-p = pypar.rank()
-processor_name = pypar.get_processor_name()
-# Block stepping
-stepping = 100
-samplesize = int(end) - int(start)
-B = samplesize/stepping +10 # Number of blocks
+    # For parallel usage on a cluster or multi core computer uncomment below
+    # and comment main() above.
+    # Must have pypar installed, uses a "stepping" of 100, which means splits up
+    # the job in batches of 100 over the processors
 
-print 'Processor %d initialised on node %s' % (p, processor_name)
-assert P > 1, 'Must have at least one slave'
-assert B > P - 1, 'Must have more work packets than slaves'
+    #Initialise
+    t = pypar.time()
+    P = pypar.size()
+    p = pypar.rank()
+    processor_name = pypar.get_processor_name()
+    # Block stepping
+    stepping = 100
+    samplesize = int(end) - int(start)
+    B = samplesize/stepping +10 # Number of blocks
+
+    print 'Processor %d initialised on node %s' % (p, processor_name)
+    assert P > 1, 'Must have at least one slave'
+    assert B > P - 1, 'Must have more work packets than slaves'
 
 
 
-if p == 0:
-    print 'samplesize = ',samplesize
-    print 'split up into %s segements' % str(1.*samplesize/stepping)
-    #Create array for storage
-    Results = dict()
-    # Create work pool (B blocks)
-    workpool = []
-    for i in range(B):
-        workpool.append(i)
-    # Distribute initial work to slaves
-    w = 0
-    for d in range(1, P):
-        pypar.send(workpool[w], destination=d)
-        w += 1
-    # Receive computed work and distribute more
-    terminated = 0
-    while(terminated < P - 1):
-        data,status= pypar.receive(pypar.any_source,return_status=True)
-        for tmp in data[1]:     # check to see if new states are already present
-            if tmp in Results:
-                Results[tmp]+=1
-            else:
-                Results[tmp]=1
-        d = status.source  # Id of slave that just finished
-        if w < len(workpool):
-            # Send new work to slave d
+    if p == 0:
+        print 'samplesize = ',samplesize
+        print 'split up into %s segements' % str(1.*samplesize/stepping)
+        #Create array for storage
+        Results = dict()
+        # Create work pool (B blocks)
+        workpool = []
+        for i in range(B):
+            workpool.append(i)
+        # Distribute initial work to slaves
+        w = 0
+        for d in range(1, P):
             pypar.send(workpool[w], destination=d)
             w += 1
-        else:
-            # Tell slave d to terminate
-            pypar.send(None, destination=d)
-            terminated += 1
-    print 'Computed '+str(samplesize)+' samples in %.2f seconds' % (pypar.time() - t)
-
-else:
-    while(True):
-        # Receive work (or None)
-        W = pypar.receive(source=0)
-        if W is None:
-            print 'Slave p%d finished: time = %.2f' % (p, pypar.time() - t)
-            break
-        # Compute allocated work
-        data = []
-        for i in xrange(0,stepping):
-            #print W*stepping+i
-            if W*stepping+i == samplesize or W*stepping+i > samplesize:
-                #print 'Finished with p%d'% (p)
-                break
+        # Receive computed work and distribute more
+        terminated = 0
+        while(terminated < P - 1):
+            data,status= pypar.receive(pypar.any_source,return_status=True)
+            for tmp in data[1]:     # check to see if new states are already present
+                if tmp in Results:
+                    Results[tmp]+=1
+                else:
+                    Results[tmp]=1
+            d = status.source  # Id of slave that just finished
+            if w < len(workpool):
+                # Send new work to slave d
+                pypar.send(workpool[w], destination=d)
+                w += 1
             else:
+                # Tell slave d to terminate
+                pypar.send(None, destination=d)
+                terminated += 1
+        print 'Computed '+str(samplesize)+' samples in %.2f seconds' % (pypar.time() - t)
 
-                x=changebase((W)*stepping+i)
-                x = np.vstack((x,getNextState(x)))
-                tmp = run(x)
-                data.append(tmp)
+    else:
+        while(True):
+            # Receive work (or None)
+            W = pypar.receive(source=0)
+            if W is None:
+                print 'Slave p%d finished: time = %.2f' % (p, pypar.time() - t)
+                break
+            # Compute allocated work
+            data = []
+            for i in xrange(0,stepping):
+                #print W*stepping+i
+                if W*stepping+i == samplesize or W*stepping+i > samplesize:
+                    #print 'Finished with p%d'% (p)
+                    break
+                else:
 
-        # Return result
-        pypar.send((W,data), destination=0)
-pypar.finalize()
-if p == 0:
-    print Results.keys()
-    print Results.values()
-    print np.sum(Results.values())
-    #np.savetxt('output.txt',A)
-"""
+                    x=changebase((W)*stepping+i)
+                    x = np.vstack((x,getNextState(x)))
+                    tmp = run(x)
+                    data.append(tmp)
+
+            # Return result
+            pypar.send((W,data), destination=0)
+    pypar.finalize()
+    if p == 0:
+        print Results.keys()
+        print Results.values()
+        print np.sum(Results.values())
+        #np.savetxt('output.txt',A)
+
