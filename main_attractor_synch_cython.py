@@ -26,7 +26,7 @@ parser.add_argument("-s","--start",type=str,help='starting string to convert to 
 parser.add_argument("-e","--end",type=str,help='ending string to convert to based Nstates')
 parser.add_argument("-f","--function",type=str,help='function to run simulation on')
 parser.add_argument("-v","--verbose",type=str,help='if you want verbose updates (use with single processor)')
-parser.add_argument("-p","--parallel",type=str,help='run in pareallel')
+parser.add_argument("-p","--parallel",type=str,help='run in parallel, use 0 or 1')
 args = parser.parse_args()
 numStates=int(args.numberstates)
 numNodes = int(args.numbernodes)
