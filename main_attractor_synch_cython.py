@@ -13,12 +13,9 @@ from itertools import combinations_with_replacement
 import numpy as np
 import timeit
 import argparse
+from importlib import import_module
+import sys
 
-# Since we had to compile the functions with Cython, we must choose within
-# the program which to use. Options so far are
-# allNodes , ironFunction, IRP2_1, IRP2_2
-#from ironFunct2 import ironFunction as function
-#from functions import ironFunction as function
 parser = argparse.ArgumentParser()
 parser.add_argument("-n","--numberstates", type=str, help="provide a number of states")
 parser.add_argument("-nn","--numbernodes", type=str, help="provide a number of nodes")
@@ -36,9 +33,11 @@ Function = str(args.function)
 parallel = int(args.parallel)
 v = int(args.verbose)
 samplesize = int(end) - int(start)
-Function = __import__(Function)
+directory, a = Function.rsplit('/', 1)
+sys.path.append(directory)
+Function = import_module(a)
 function = Function.function
-#print samplesize
+
 if parallel == True:
     import pypar
 totalStates = int(numStates) ** (1.*int(numNodes))
