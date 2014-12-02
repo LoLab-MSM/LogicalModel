@@ -5,22 +5,9 @@ Created on Thu Oct  2 14:36:46 2014
 @author: pinojc
 """
 
-#/bin/tcsh
-#PBS -l nodes=1:ppn=16
-#PBS -M james.c.pino@vanderbilt.edu
-#PBS -m bae
-#PBS -l mem=4000mb
-#PBS -l walltime=00:10:00
-#PBS -o sample_0-100.out
-
-#setpkgs -a python2 openmpi_intel
-
-#cd /home/pinojc/LogicModel
 Python ='mpirun -npernode 8 /usr/local/python2/latest/x86_64/gcc46/nonet/bin/python main_attractor_synch_cython2.py '
 
 PLACE = 'cd /home/pinojc/LogicModel2'
-#mpirun -np 16 /dors/meilerlab/apps/Linux2/x86_64/bin/python basis_attr_synch_cython.py -n 3 -nn 21 -s 0 -e 14348907
-#Python = '/dors/meilerlab/apps/Linux2/x86_64/bin/python basis_attr_synch_cython.py'
 N = 3
 NN = 21
 NP=4
