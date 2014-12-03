@@ -8,7 +8,7 @@ import pylab as plt
 import numpy as np
 import re
 import sys
-
+import os
 f = open(sys.argv[1],'r')
 f = t = map(lambda s: s.strip(), f)
 f_new = open(sys.argv[2],'w')
@@ -42,11 +42,20 @@ for line in f:
     #print line[:-1]
 print>>f_new,'\tfor i in xrange(0,len(vector)):\n\t\twhile vector[i] > 3:\n\t\t\tvector[i] = vector[i]%3\n\treturn vector'
 f_new.close()
-print " Ready to compile with cython.\
-\n Use command cython filename.pyx to convery to c code\
-\n Then compile with c code with gcc, example if filename = ironFunct2 \
-\n gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing -I/usr/include/python2.7 -o ironFunct2.so ironFunct2.c"
+#print " Ready to compile with cython.\
+#\n Use command cython filename.pyx to convery to c code\
+#\n Then compile with c code with gcc, example if filename = ironFunct2 \
+#\n gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing -I/usr/include/python2.7 -o ironFunct2.so ironFunct2.c"
+os.system('sleep 2s')
+setup = open('setup.py','w')
+print>>setup,"from distutils.core import setup\
+\nfrom Cython.Build import cythonize\
+\nsetup(\
+\n    ext_modules = cythonize('"+sys.argv[2]+"')\
+\n    )"
+setup.close()
 
-
+import os
+os.system('python setup.py build_ext --inplace')
 
 

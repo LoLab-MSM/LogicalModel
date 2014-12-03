@@ -100,7 +100,7 @@ def main():
     x = np.zeros((2,numNodes),dtype=int)
     for i in range(start,end):
         if v == 1:
-            print str(i),'/',end
+            print str(i+1),'/',end
         x[0,:]=changebase(i)
         x[1,:]=getNextState(x[0,:])
         tmp=run(x)
