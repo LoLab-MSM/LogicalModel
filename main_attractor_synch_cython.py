@@ -15,6 +15,7 @@ import timeit
 import argparse
 from importlib import import_module
 import sys
+import os.path
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-n","--numberstates", type=str, help="provide a number of states")
@@ -33,9 +34,9 @@ Function = str(args.function)
 parallel = int(args.parallel)
 v = int(args.verbose)
 samplesize = int(end) - int(start)
-directory, a = Function.rsplit('/', 1)
+directory, file = os.path.split(Function) 
 sys.path.append(directory)
-Function = import_module(a)
+Function = import_module(file)
 function = Function.function
 
 if parallel == True:
