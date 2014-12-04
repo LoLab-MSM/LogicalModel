@@ -52,8 +52,8 @@ print>>setup,"from distutils.core import setup\
 \nimport numpy\
 \nfrom Cython.Build import cythonize\
 \nsetup(\
-\n    ext_modules = cythonize('"+sys.argv[2]+"',include_path = [numpy.get_include()])\
-\n    )"
+\n    ext_modules = cythonize('"+sys.argv[2]+"',),\
+      include_dirs = [numpy.get_include()])"
 setup.close()
 
 os.system('python setup.py build_ext --inplace')
