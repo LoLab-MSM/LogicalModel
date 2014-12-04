@@ -6,6 +6,7 @@ Created on Mon Nov 17 13:52:14 2014
 """
 import pylab as plt
 import numpy as np
+import numpy
 import re
 import sys
 import os
@@ -50,7 +51,7 @@ setup = open('setup.py','w')
 print>>setup,"from distutils.core import setup\
 \nfrom Cython.Build import cythonize\
 \nsetup(\
-\n    ext_modules = cythonize('"+sys.argv[2]+"',include_path = [np.get_include()])\
+\n    ext_modules = cythonize('"+sys.argv[2]+"',include_path = [numpy.get_include()])\
 \n    )"
 setup.close()
 
