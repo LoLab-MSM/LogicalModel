@@ -9,7 +9,6 @@ Python ='mpirun -npernode 8 /usr/local/python2/latest/x86_64/gcc46/nonet/bin/pyt
 
 PLACE = 'cd /home/pinojc/LogicModel2'
 N = 3
-NN = 21
 NP=4
 for i in xrange(0,730):
     f=open('submit-'+str(i)+".pbs",'w')
@@ -19,5 +18,5 @@ for i in xrange(0,730):
     -a python2 openmpi_intel  \n '
     print>>f ,PLACE
     #print 'bash mpirun -np',str(NP),
-    print>>f,str(Python),' -n',str(N),' -nn ',str(NN),' \
+    print>>f,str(Python),' -n',str(N),'\
     -s ',str(i*14348907),' -e ',str((i+1)*14348907)
