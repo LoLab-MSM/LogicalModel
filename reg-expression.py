@@ -49,7 +49,7 @@ f_new.close()
 os.system('sleep 2s')
 setup = open('setup.py','w')
 print>>setup,"from distutils.core import setup\
-\n import numpy\
+\nimport numpy\
 \nfrom Cython.Build import cythonize\
 \nsetup(\
 \n    ext_modules = cythonize('"+sys.argv[2]+"',include_path = [numpy.get_include()])\
