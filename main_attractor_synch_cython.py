@@ -31,10 +31,20 @@ def compile_cython_code(Model):
     f = map(lambda s: s.strip(), f)
     global  numNodes
     numNodes = len(f)
-    if os.path.exists('model_code.pyx'):
+    directory, file = os.path.split(Model)
+    new_model = file[:-4]
+
+    if os.path.exists(new_model+'.so'):
+        os.system('sleep 4s')
         print 'Cython code already exists. Ensure that you are running the correct model.'
+        sys.path.append(directory)
+        Function = import_module(new_model)
+
+        function = Function.function
+        global function
         return
-    f_new = open('model_code.pyx','w')
+    f_new = open(new_model+'.pyx','w')
+
     modules = 'from __future__ import division\
     \nimport numpy as np\
     \ncimport numpy as np\
@@ -73,11 +83,15 @@ def compile_cython_code(Model):
     \nimport numpy\
     \nfrom Cython.Build import cythonize\
     \nsetup(\
-    \n    ext_modules = cythonize('model_code.pyx',),\
+    \n    ext_modules = cythonize('"+new_model+".pyx',),\
           include_dirs = [numpy.get_include()])"
     setup.close()
     os.system('python setup.py build_ext --inplace')
+    sys.path.append(directory)
+    Function = import_module(new_model)
 
+    function = Function.function
+    global function
 
 
 def changebase(number):
@@ -135,7 +149,7 @@ def main():
     #for i in xrange(samplesize):
     for i in xrange(start,end):
         if v == 1:
-            print str(i+1),'/',samplesize
+            print str(i+1),'/',end
         x[0,:]=changebase(i)
         x[1,:]=getNextState(x[0,:])
         tmp=run(x)
@@ -162,11 +176,11 @@ else:
     start = 0
 parallel = int(args.parallel)
 v = int(args.verbose)
-directory, file = os.path.split('model_code')
-sys.path.append(directory)
-Function = import_module(file)
-global function
-function = Function.function
+#directory, file = os.path.split('model_code')
+#sys.path.append(directory)
+#Function = import_module(file)
+#global function
+#function = Function.function
 global blank
 blank = np.empty((numStates**9,numNodes), dtype=int)
 samplesize = end - start
@@ -181,10 +195,10 @@ if parallel == True:
     import pypar
     # Must have pypar installed, uses a "stepping" of 100, which means splits up
     # the job in batches of 100 over the processors
-    directory, file = os.path.split('model_code')
-    sys.path.append(directory)
-    Function = import_module(file)
-    function = Function.function
+    #directory, file = os.path.split('model_code')
+    #sys.path.append(directory)
+    #Function = import_module(file)
+    #function = Function.function
     blank = np.empty((numStates**9,numNodes), dtype=int)
     #Initialise
     t = pypar.time()
