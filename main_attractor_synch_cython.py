@@ -203,11 +203,11 @@ if parallel == True:
     p = pypar.rank()
     processor_name = pypar.get_processor_name()
     # Block stepping
-    stepping = 100
+    stepping = 10
     dir,file = os.path.split(Model)
     prefix = file.split('.')[0]
     if p == 0:
-        compile_cython_code(Model, overwrite=True)
+        compile_cython_code(Model, overwrite=False)
     else:
         while os.path.exists(prefix+'.so') == False:
             time.sleep(.2)
@@ -215,7 +215,6 @@ if parallel == True:
         function = Function.function
 
     B = samplesize/stepping # Number of blocks
-    print 'B=',B
     print 'Processor %d initialised on node %s' % (p, processor_name)
     assert P > 1, 'Must have at least one slave'
     assert B > P - 1, 'Must have more work packets than slaves'
@@ -223,16 +222,16 @@ if parallel == True:
     if p == 0:
 
         print 'samplesize = ',samplesize
-        print 'split up into %s segements' % str(1.*B)
+        print 'split up into %s segments' % str(B)
         #Create array for storage
         Results = dict()
         # Create work pool (B blocks)
         workpool = []
-        for i in range(start, end, stepping):
+        for i in xrange(start, end, stepping):
             workpool.append(i)
         # Distribute initial work to slaves
         w = 0
-        for d in range(1, P):
+        for d in xrange(1, P):
             pypar.send(workpool[w], destination=d)
             w += 1
         # Receive computed work and distribute more
@@ -264,11 +263,11 @@ if parallel == True:
             # Compute allocated work
             data = []
             for i in xrange(0,stepping):
-                if v == 1:
-                    print str(W+i),'/',end
-                if  W+i > end:
+                if  W+i >= end:
                     break
                 else:
+                    if v == 1:
+                        print str(W+i+1),'/',end
                     x = changebase(W+i)
                     x = np.vstack((x,getNextState(x)))
                     tmp = run(x)
@@ -278,8 +277,7 @@ if parallel == True:
             pypar.send((W,data), destination=0)
     pypar.finalize()
     if p == 0:
-        print Results.keys()
-        print Results.values()
-        print np.sum(Results.values())
-
+        print 'Attractors ',Results.keys()
+        print 'Frequencies ',Results.values()
+        print 'Total ',np.sum(Results.values())
 
