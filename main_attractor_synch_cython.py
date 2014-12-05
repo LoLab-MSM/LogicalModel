@@ -25,12 +25,19 @@ p.add_argument("-p","--parallel", type=str, help='run in parallel, use 0 or 1')
 args = p.parse_args()
 
 numStates=int(args.nstates)
+def get_num_nodes(model_file):
 
+    global numNodes
+
+    f = open(model_file,'r')
+    functions = map(lambda s: s.strip(), f)
+    numNodes = len(functions)
+    f.close()
 def compile_cython_code(model_file, overwrite=False):
-    
+
     global function
     global numNodes
-    
+
     f = open(model_file,'r')
     functions = map(lambda s: s.strip(), f)
     numNodes = len(functions)
@@ -39,17 +46,15 @@ def compile_cython_code(model_file, overwrite=False):
 
     # Warn the user if .so file already exists
     if os.path.exists(prefix+'.so'):
-        os.system('sleep 4s')
         warning_string = 'Shared object file \'%s\' already exists: ' % (prefix+'.so')
         if overwrite:
             warnings.warn(warning_string + 'overwriting file.')
             os.remove(prefix+'.so')
         else:
             warnings.warn(warning_string + 'moving on.')
-            sys.path.append(dir)
             function = import_module(prefix).function
             return
-    
+
     pyxfile = open(prefix+'.pyx','w')
 
     outstring = \
@@ -81,7 +86,7 @@ def compile_cython_code(model_file, overwrite=False):
     outstring += '\tfor i in xrange(0,len(vector)):\n\t\twhile vector[i] > %d:\n\t\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' % (numStates, numStates)
     pyxfile.write(outstring)
     pyxfile.close()
-    os.system('sleep 2s')
+    #os.system('sleep 2s')
     setup = open('setup.py','w')
     outstring = \
     "from distutils.core import setup\
@@ -95,7 +100,7 @@ def compile_cython_code(model_file, overwrite=False):
     os.system('python setup.py build_ext --inplace')
     sys.path.append(dir)
     function = import_module(prefix).function
-    
+
 def changebase(number):
     counter = -1
     state = np.zeros(numNodes,dtype=int)
@@ -146,8 +151,8 @@ def main():
     print 'Started '
     start_time = time.time()
     data = dict()
+    compile_cython_code(Model, overwrite=False)
     x = np.zeros((2,numNodes),dtype=int)
-    #for i in xrange(samplesize):
     for i in xrange(start,end):
         if v == 1:
             print str(i+1),'/',end
@@ -158,34 +163,31 @@ def main():
             data[tmp]+=1
         else:
             data[tmp]=1
-    print 'time of '+str(samplesize)+' calculations '+ str((time.time() - start_time)/60)+' minutes'
+    print 'Computed %s samples %.4f minutes' %(str(samplesize),(time.time() - start_time)/60)
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
-    print np.sum(data.values())
+    print 'Total ',np.sum(data.values())
 
 Model = str(args.model)
-compile_cython_code(Model, overwrite=True)
-if args.end != None:
-    end = int(args.end)
-else:
-    end = numStates**numNodes
+get_num_nodes(Model)
+blank = np.empty((numStates**9,numNodes), dtype=int)
 if args.start != None:
     start = int(args.start)
 else:
     start = 0
-parallel = int(args.parallel)
-v = int(args.verbose)
-#directory, file = os.path.split('model_code')
-#sys.path.append(directory)
-#Function = import_module(file)
-#global function
-#function = Function.function
-global blank
-blank = np.empty((numStates**9,numNodes), dtype=int)
+if args.end != None:
+    end = int(args.end)
+else:
+    end = numStates**numNodes
+if args.parallel != None:
+    parallel = int(args.parallel)
+else:
+    parallel = 0
+if args.verbose != None:
+    v = int(args.verbose)
+else:
+    v = 0
 samplesize = end - start
-
-
-
 
 if parallel == False:
     print "Running on single CPU"
@@ -193,27 +195,30 @@ if parallel == False:
 if parallel == True:
     import pypar
     # Must have pypar installed, uses a "stepping" of 100, which means splits up
-    # the job in batches of 100 over the processors
-    #directory, file = os.path.split('model_code')
-    #sys.path.append(directory)
-    #Function = import_module(file)
-    #function = Function.function
-    blank = np.empty((numStates**9,numNodes), dtype=int)
+    # the job in batches of 10 over the processors
+
     #Initialise
     t = pypar.time()
     P = pypar.size()
     p = pypar.rank()
     processor_name = pypar.get_processor_name()
     # Block stepping
-    stepping = 10
+    stepping = 100
+    dir,file = os.path.split(Model)
+    prefix = file.split('.')[0]
+    if p == 0:
+        compile_cython_code(Model, overwrite=True)
+    else:
+        while os.path.exists(prefix+'.so') == False:
+            time.sleep(.2)
+        Function = import_module(prefix)
+        function = Function.function
 
     B = samplesize/stepping # Number of blocks
     print 'B=',B
     print 'Processor %d initialised on node %s' % (p, processor_name)
     assert P > 1, 'Must have at least one slave'
     assert B > P - 1, 'Must have more work packets than slaves'
-
-
 
     if p == 0:
 
@@ -248,15 +253,13 @@ if parallel == True:
                 # Tell slave d to terminate
                 pypar.send(None, destination=d)
                 terminated += 1
-        print 'Computed '+str(samplesize)+' samples in %.2f seconds' % (pypar.time() - t)
+        print 'Computed '+str(samplesize)+' samples in %.4f minutes' % ((pypar.time() - t)/60)
 
     else:
         while(True):
             # Receive work (or None)
             W = pypar.receive(source=0)
-            #print W
             if W is None:
-                #print 'Slave p%d finished: time = %.2f ' % (p, pypar.time() - t)
                 break
             # Compute allocated work
             data = []
@@ -264,7 +267,6 @@ if parallel == True:
                 if v == 1:
                     print str(W+i),'/',end
                 if  W+i > end:
-                    #print 'Finished with p%d'% (p)
                     break
                 else:
                     x = changebase(W+i)
