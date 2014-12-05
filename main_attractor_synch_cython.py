@@ -2,11 +2,9 @@
 """
 Created on Mon Sep 29 16:55:23 2014
 
-@author: James C Pino ,  Leonard Harris, Carlos F. Lopez
+@author: James C Pino, Leonard A Harris
 
 """
-
-
 import numpy as np
 import time
 import argparse
@@ -15,85 +13,89 @@ import sys
 import os.path
 import re
 import os
-parser = argparse.ArgumentParser()
-parser.add_argument("-n","--numberstates", type=str, help="provide a number of states")
-parser.add_argument("-s","--start",type=str,help='starting string to convert to base Nstates')
-parser.add_argument("-e","--end",type=str,help='ending string to convert to based Nstates')
-parser.add_argument("-m","--model",type=str,help='model to run simulation, assumes file to end in .txt')
-parser.add_argument("-v","--verbose",type=str,help='if you want verbose updates (use with single processor)')
-parser.add_argument("-p","--parallel",type=str,help='run in parallel, use 0 or 1')
-args = parser.parse_args()
+import warnings
 
+p = argparse.ArgumentParser()
+p.add_argument("-n","--nstates",  type=str, help='provide a number of states')
+p.add_argument("-s","--start",    type=str, help='starting string to convert to base Nstates')
+p.add_argument("-e","--end",      type=str, help='ending string to convert to based Nstates')
+p.add_argument("-m","--model",    type=str, help='model to run simulation, assumes file to end in .txt')
+p.add_argument("-v","--verbose",  type=str, help='if you want verbose updates (use with single processor)')
+p.add_argument("-p","--parallel", type=str, help='run in parallel, use 0 or 1')
+args = p.parse_args()
 
+numStates=int(args.nstates)
 
-def compile_cython_code(Model):
-    f = open(Model,'r')
-    f = map(lambda s: s.strip(), f)
-    global  numNodes
-    numNodes = len(f)
-    directory, file = os.path.split(Model)
-    new_model = file[:-4]
+def compile_cython_code(model_file, overwrite=False):
+    
+    global function
+    global numNodes
+    
+    f = open(model_file,'r')
+    functions = map(lambda s: s.strip(), f)
+    numNodes = len(functions)
+    dir,file = os.path.split(model_file)
+    prefix = file.split('.')[0]
 
-    if os.path.exists(new_model+'.so'):
+    # Warn the user if .so file already exists
+    if os.path.exists(prefix+'.so'):
         os.system('sleep 4s')
-        print 'Cython code already exists. Ensure that you are running the correct model.'
-        sys.path.append(directory)
-        Function = import_module(new_model)
+        warning_string = 'Shared object file \'%s\' already exists: ' % (prefix+'.so')
+        if overwrite:
+            warnings.warn(warning_string + 'overwriting file.')
+            os.remove(prefix+'.so')
+        else:
+            warnings.warn(warning_string + 'moving on.')
+            sys.path.append(dir)
+            function = import_module(prefix).function
+            return
+    
+    pyxfile = open(prefix+'.pyx','w')
 
-        function = Function.function
-        global function
-        return
-    f_new = open(new_model+'.pyx','w')
-
-    modules = 'from __future__ import division\
+    outstring = \
+    'from __future__ import division\
     \nimport numpy as np\
     \ncimport numpy as np\
-    \ncimport cython'
-    print>>f_new,modules
-    header = '\nDTYPE = np.int\
+    \ncimport cython\
+    \n\nDTYPE = np.int\
     \nctypedef np.int_t DTYPE_t\
     \n@cython.boundscheck(False)\
     \ndef function(np.ndarray[DTYPE_t, ndim=1] x):\
     \n\tcdef int vectorsize = x.shape[0]\
-    \n\tcdef np.ndarray[DTYPE_t, ndim=1]\
-    \tvector = np.zeros([vectorsize],dtype=int)'
-    print>>f_new,header
-    count=0
-    for line in f:
-        count+=1
-        for i in reversed(range(0,22)):
-            exp = 'f'+str(i)
-            repl = 'vector[%d]'%(int(i)-1)
-            line = re.sub(exp,repl,line)
-            exp1 = 'x'+str(i)
-            repl1 = 'x[%d]'%(int(i)-1)
-            line = re.sub(exp1,repl1,line)
-            exp2 = 'x\['+str(i)+'\]\^2'
-            X = 'x[%d]*x[%d]' % (int(i) ,int(i))
-            line = re.sub(exp2,X,line)
-            exp3 = 'x\['+str(i)+'\]\^3'
-            X = 'x[%d]*x[%d]*x[%d]' % (int(i) ,int(i),int(i))
-            line = re.sub(exp3,X,line)
-        print>>f_new,'\t',line
-    print>>f_new,'\tfor i in xrange(0,len(vector)):\n\t\twhile vector[i] > 3:\n\t\t\tvector[i] = vector[i]%3\n\treturn vector'
-    f_new.close()
+    \n\tcdef np.ndarray[DTYPE_t, ndim=1] vector = np.zeros([vectorsize],dtype=int)\n'
+    for line in functions:
+        # Replace function name
+        line = re.sub('f\d+', 'vector[%d]' % (int(re.match('f(\d+)', line).group(1))-1), line)
+        # Convert powers (^) to simple multiplications
+        matches = re.findall('(x\d+)\^(\d+)', line)
+        for m in matches:
+            repl = m[0]
+            for i in range(1,int(m[1])):
+                repl += "*%s" % m[0]
+            line = re.sub('x\d+\^\d+', repl, line, count=1)
+        # Replace node names
+        matches = np.array(re.findall('x(\d+)', line), dtype=int)
+        for m in matches:
+            line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
+        outstring += '\t%s\n' % line
+    outstring += '\tfor i in xrange(0,len(vector)):\n\t\twhile vector[i] > %d:\n\t\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' % (numStates, numStates)
+    pyxfile.write(outstring)
+    pyxfile.close()
     os.system('sleep 2s')
     setup = open('setup.py','w')
-    print>>setup,"from distutils.core import setup\
+    outstring = \
+    "from distutils.core import setup\
     \nimport numpy\
     \nfrom Cython.Build import cythonize\
     \nsetup(\
-    \n    ext_modules = cythonize('"+new_model+".pyx',),\
+    \n    ext_modules = cythonize('"+prefix+".pyx',),\
           include_dirs = [numpy.get_include()])"
+    setup.write(outstring)
     setup.close()
     os.system('python setup.py build_ext --inplace')
-    sys.path.append(directory)
-    Function = import_module(new_model)
-
-    function = Function.function
-    global function
-
-
+    sys.path.append(dir)
+    function = import_module(prefix).function
+    
 def changebase(number):
     counter = -1
     state = np.zeros(numNodes,dtype=int)
@@ -109,7 +111,6 @@ def changebase(number):
         counter -=1
         number = quotient
     return state
-
 
 def getNextState(state):
     nextstate = function(state)
@@ -163,9 +164,7 @@ def main():
     print np.sum(data.values())
 
 Model = str(args.model)
-compile_cython_code(Model)
-numStates=int(args.numberstates)
-start = int(args.start)
+compile_cython_code(Model, overwrite=True)
 if args.end != None:
     end = int(args.end)
 else:
