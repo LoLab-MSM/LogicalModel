@@ -24,7 +24,8 @@ p.add_argument("-v","--verbose",  type=str, help='if you want verbose updates (u
 p.add_argument("-p","--parallel", type=str, help='run in parallel, use 0 or 1')
 args = p.parse_args()
 
-numStates=int(args.nstates)
+#numStates=int(args.nstates)
+numStates=3
 def get_num_nodes(model_file):
 
     global numNodes
@@ -117,36 +118,26 @@ def changebase(number):
         number = quotient
     return state
 
-def getNextState(state):
-    nextstate = function(state)
-    return nextstate
-
-def checkStates(x):
-    if ((x[:-1,:] == x[-1,:]).sum(axis=1)==numNodes).any() ==1:
-        i = np.where((x[:-1,:] != x[-1,:]).sum(axis=1) == 0)
-        return i[0][0]
-    else:
-        return -1
-
+Where = np.where
+All = np.all
+#@profile
 def run(x):
     counter = 1
     blank[0:2,:] = x
-    while checkStates(blank[0:counter,:])==-1:
-        blank[counter+1,:]=getNextState(blank[counter,:])
+    cont= []
+
+    while len(cont) == 0:
+        blank[counter+1,:]=function(blank[counter,:])
+        cont = Where(All(blank[0:counter,:] == blank[counter,:],axis=1))[0]
         counter += 1
-    xx = blank[checkStates(blank[:counter,:]):counter]
+        
+    xx = blank[cont[0]:counter-1]
     ncols = xx.shape[1]
     dtype = xx.dtype.descr * ncols
-    struct = xx.view(dtype)
-    uniq = np.unique(struct)
-    uniq = uniq.view(xx.dtype).reshape(-1, ncols)
-    uniq[uniq[:,1].argsort()]
-    uniq = uniq[0]
-    data = ''
-    for u in uniq:
-        data+=str(u)
-    return data
-
+    struct = xx.view(dtype).reshape(len(xx)) 
+    uniq = struct.view(xx.dtype).reshape(-1, ncols).min(axis=0) 
+    return ''.join([uniq[num].tostring() for num in xrange(numNodes)])
+#@profile
 def main():
     print 'Started '
     start_time = time.time()
@@ -154,21 +145,30 @@ def main():
     compile_cython_code(Model, overwrite=False)
     x = np.zeros((2,numNodes),dtype=int)
     for i in xrange(start,end):
-        if v == 1:
-            print str(i+1),'/',end
-        x[0,:]=changebase(i)
-        x[1,:]=getNextState(x[0,:])
-        tmp=run(x)
-        if tmp in data:
+        #print ' '
+        #if v == 1:
+        #    print str(i+1),'/',end
+        try:
+            data[i] +=1
+        except:
+            x[0,:]=changebase(i)
+            x[1,:]=function(x[0,:])
+            tmp=run(x)
+        try:
             data[tmp]+=1
-        else:
+        except:
             data[tmp]=1
     print 'Computed %s samples %.4f minutes' %(str(samplesize),(time.time() - start_time)/60)
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
-
-Model = str(args.model)
+import profile
+if args.model == None:
+    #Model = 'Models/func_example.txt'
+    Model = 'Models/core_iron_6variables_3states.txt'
+    #Model ='Models/final_continuous_model_21_nodes.txt'
+else:
+    Model = str(args.model)
 get_num_nodes(Model)
 blank = np.empty((numStates**9,numNodes), dtype=int)
 if args.start != None:
@@ -190,8 +190,9 @@ else:
 samplesize = end - start
 
 if parallel == False:
-    print "Running on single CPU"
+    #print "Running on single CPU"
     main()
+    #profile.run('main()',sort=2)
 if parallel == True:
     import pypar
     # Must have pypar installed, uses a "stepping" of 100, which means splits up
@@ -203,7 +204,7 @@ if parallel == True:
     p = pypar.rank()
     processor_name = pypar.get_processor_name()
     # Block stepping
-    stepping = 10
+    stepping = 1000
     dir,file = os.path.split(Model)
     prefix = file.split('.')[0]
     if p == 0:
@@ -269,7 +270,7 @@ if parallel == True:
                     if v == 1:
                         print str(W+i+1),'/',end
                     x = changebase(W+i)
-                    x = np.vstack((x,getNextState(x)))
+                    x = np.vstack((x,function(x)))
                     tmp = run(x)
                     data.append(tmp)
 
@@ -280,4 +281,6 @@ if parallel == True:
         print 'Attractors ',Results.keys()
         print 'Frequencies ',Results.values()
         print 'Total ',np.sum(Results.values())
+
+
 
