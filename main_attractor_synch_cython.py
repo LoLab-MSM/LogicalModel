@@ -14,7 +14,7 @@ import os.path
 import re
 import os
 import warnings
-
+import changeBase
 p = argparse.ArgumentParser()
 p.add_argument("-n","--nstates",  type=str, help='provide a number of states')
 p.add_argument("-s","--start",    type=str, help='starting string to convert to base Nstates')
@@ -84,7 +84,7 @@ def compile_cython_code(model_file, overwrite=False):
         for m in matches:
             line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
         outstring += '\t%s\n' % line
-    outstring += '\tfor i in xrange(0,len(vector)):\n\t\twhile vector[i] > %d:\n\t\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' % (numStates, numStates)
+    outstring += '\tfor i in xrange(0,len(vector)):\n\tvector[i] = vector[i]%%%d\n\treturn vector\n' % (numStates, numStates)
     pyxfile.write(outstring)
     pyxfile.close()
     #os.system('sleep 2s')
@@ -102,41 +102,19 @@ def compile_cython_code(model_file, overwrite=False):
     sys.path.append(dir)
     function = import_module(prefix).function
 
-def changebase(number):
-    counter = -1
-    state = np.zeros(numNodes,dtype=int)
-    quotient = number/numStates
-    remainder = int(number) % int(numStates)
-    number = quotient
-    state[counter] = remainder
-    counter -=1
-    while quotient !=0:
-        quotient = int(number)/int(numStates)
-        remainder = int(number) % int(numStates)
-        state[counter] = remainder
-        counter -=1
-        number = quotient
-    return state
 
 Where = np.where
 All = np.all
-#@profile
+@profile
 def run(x):
     counter = 1
     blank[0:2,:] = x
     cont= []
-
     while len(cont) == 0:
         blank[counter+1,:]=function(blank[counter,:])
         cont = Where(All(blank[0:counter,:] == blank[counter,:],axis=1))[0]
-        counter += 1
-        
-    xx = blank[cont[0]:counter-1]
-    ncols = xx.shape[1]
-    dtype = xx.dtype.descr * ncols
-    struct = xx.view(dtype).reshape(len(xx)) 
-    uniq = struct.view(xx.dtype).reshape(-1, ncols).min(axis=0) 
-    return ''.join([uniq[num].tostring() for num in xrange(numNodes)])
+        counter = counter + 1
+    return blank[cont[0]:counter-1].min(axis=0).tostring()
 #@profile
 def main():
     print 'Started '
@@ -145,13 +123,10 @@ def main():
     compile_cython_code(Model, overwrite=False)
     x = np.zeros((2,numNodes),dtype=int)
     for i in xrange(start,end):
-        #print ' '
-        #if v == 1:
-        #    print str(i+1),'/',end
         try:
             data[i] +=1
         except:
-            x[0,:]=changebase(i)
+            x[0,:]=changeBase.changebase(i,numNodes,numStates)
             x[1,:]=function(x[0,:])
             tmp=run(x)
         try:
