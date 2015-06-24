@@ -84,7 +84,7 @@ def compile_cython_code(model_file, overwrite=False):
         for m in matches:
             line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
         outstring += '\t%s\n' % line
-    outstring += '\tfor i in xrange(0,len(vector)):\n\tvector[i] = vector[i]%%%d\n\treturn vector\n' % (numStates, numStates)
+    outstring += '\tfor i in xrange(0,len(vector)):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' %  numStates
     pyxfile.write(outstring)
     pyxfile.close()
     #os.system('sleep 2s')
@@ -105,7 +105,8 @@ def compile_cython_code(model_file, overwrite=False):
 
 Where = np.where
 All = np.all
-@profile
+Sort = np.sort
+#@profile
 def run(x):
     counter = 1
     blank[0:2,:] = x
@@ -114,7 +115,15 @@ def run(x):
         blank[counter+1,:]=function(blank[counter,:])
         cont = Where(All(blank[0:counter,:] == blank[counter,:],axis=1))[0]
         counter = counter + 1
-    return blank[cont[0]:counter-1].min(axis=0).tostring()
+    xx = blank[cont[0]:counter-1]
+    struct = xx.view(dtype)
+    uniq = Sort(struct,axis=0)
+    uniq = uniq.view(xx.dtype).reshape(-1, ncols)
+    uniq = uniq[0]
+
+    #return ''.join([`num` for num in uniq])
+    return uniq.tostring()
+import struct
 #@profile
 def main():
     print 'Started '
@@ -122,18 +131,20 @@ def main():
     data = dict()
     compile_cython_code(Model, overwrite=False)
     x = np.zeros((2,numNodes),dtype=int)
+    global ncols,dtype
+    ncols = x.shape[1]
+    dtype = x.dtype.descr * ncols
     for i in xrange(start,end):
-        try:
-            data[i] +=1
-        except:
-            x[0,:]=changeBase.changebase(i,numNodes,numStates)
-            x[1,:]=function(x[0,:])
-            tmp=run(x)
+
+        x[0,:]=changeBase.changebase(i,numNodes,numStates)
+        x[1,:]=function(x[0,:])
+        tmp=run(x)
         try:
             data[tmp]+=1
         except:
             data[tmp]=1
-    print 'Computed %s samples %.4f minutes' %(str(samplesize),(time.time() - start_time)/60)
+    endT = time.time()
+    print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
@@ -244,7 +255,7 @@ if parallel == True:
                 else:
                     if v == 1:
                         print str(W+i+1),'/',end
-                    x = changebase(W+i)
+                    x = changeBase.changebase(W+i,numNodes,numStates)
                     x = np.vstack((x,function(x)))
                     tmp = run(x)
                     data.append(tmp)
