@@ -14,7 +14,8 @@ import os.path
 import re
 import os
 import warnings
-import changeBase
+from changeBase import changebase
+import multiprocessing as mp
 p = argparse.ArgumentParser()
 p.add_argument("-n","--nstates",  type=str, help='provide a number of states')
 p.add_argument("-s","--start",    type=str, help='starting string to convert to base Nstates')
@@ -67,8 +68,8 @@ def compile_cython_code(model_file, overwrite=False):
     \nctypedef np.int_t DTYPE_t\
     \n@cython.boundscheck(False)\
     \ndef function(np.ndarray[DTYPE_t, ndim=1] x):\
-    \n\tcdef int vectorsize = x.shape[0]\
-    \n\tcdef np.ndarray[DTYPE_t, ndim=1] vector = np.zeros([vectorsize],dtype=int)\n'
+    \n\tcdef unsigned int vectorsize = %d\
+    \n\tcdef np.ndarray[DTYPE_t, ndim=1] vector = np.zeros([vectorsize],dtype=int)\n'%numNodes
     for line in functions:
         # Replace function name
         line = re.sub('f\d+', 'vector[%d]' % (int(re.match('f(\d+)', line).group(1))-1), line)
@@ -84,7 +85,8 @@ def compile_cython_code(model_file, overwrite=False):
         for m in matches:
             line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
         outstring += '\t%s\n' % line
-    outstring += '\tfor i in xrange(0,len(vector)):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' %  numStates
+    #outstring += '\tvector = np.fmod(vector,%d)\n\treturn vector\n' %  numStates
+    outstring += '\tfor i in xrange(%d):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' %  (numNodes,numStates)
     pyxfile.write(outstring)
     pyxfile.close()
     #os.system('sleep 2s')
@@ -107,38 +109,33 @@ Where = np.where
 All = np.all
 Sort = np.sort
 #@profile
-def run(x):
-    counter = 1
-    blank[0:2,:] = x
-    cont= []
-    while len(cont) == 0:
-        blank[counter+1,:]=function(blank[counter,:])
-        cont = Where(All(blank[0:counter,:] == blank[counter,:],axis=1))[0]
-        counter = counter + 1
-    xx = blank[cont[0]:counter-1]
-    struct = xx.view(dtype)
-    uniq = Sort(struct,axis=0)
-    uniq = uniq.view(xx.dtype).reshape(-1, ncols)
-    uniq = uniq[0]
-
-    #return ''.join([`num` for num in uniq])
-    return uniq.tostring()
-import struct
+def run(i):
+    x = np.zeros((1,numNodes),dtype=int)
+    x[0,:]=changebase(i,numNodes,numStates)
+    path = set()
+    loc =tuple(x[0])
+    path.add(loc)
+    tmp =function(x.reshape(numNodes))
+    while not tuple(tmp) in path:
+        path.add(tuple(tmp))
+        tmp =function(tmp)
+    path = set()
+    path.add(tuple(tmp))
+    tmp =function(tmp)
+    while not tuple(tmp) in path:
+        path.add(tuple(tmp))
+        tmp =function(tmp)
+    
+    return path.pop()
 #@profile
-def main():
+def main1():
     print 'Started '
     start_time = time.time()
     data = dict()
     compile_cython_code(Model, overwrite=False)
-    x = np.zeros((2,numNodes),dtype=int)
-    global ncols,dtype
-    ncols = x.shape[1]
-    dtype = x.dtype.descr * ncols
+    
     for i in xrange(start,end):
-
-        x[0,:]=changeBase.changebase(i,numNodes,numStates)
-        x[1,:]=function(x[0,:])
-        tmp=run(x)
+        tmp=run(i)
         try:
             data[tmp]+=1
         except:
@@ -148,7 +145,6 @@ def main():
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
-import profile
 if args.model == None:
     #Model = 'Models/func_example.txt'
     Model = 'Models/core_iron_6variables_3states.txt'
@@ -174,10 +170,12 @@ if args.verbose != None:
 else:
     v = 0
 samplesize = end - start
-
+global ncols,dtype
+ncols = numNodes
+dtype = [('', '<i8')] * ncols
 if parallel == False:
     #print "Running on single CPU"
-    main()
+    main1()
     #profile.run('main()',sort=2)
 if parallel == True:
     import pypar
@@ -248,17 +246,19 @@ if parallel == True:
             if W is None:
                 break
             # Compute allocated work
-            data = []
+            data = {}
             for i in xrange(0,stepping):
                 if  W+i >= end:
                     break
                 else:
                     if v == 1:
                         print str(W+i+1),'/',end
-                    x = changeBase.changebase(W+i,numNodes,numStates)
-                    x = np.vstack((x,function(x)))
-                    tmp = run(x)
-                    data.append(tmp)
+                    tmp = run(v)
+                    try:
+                        data[tmp]+=1
+                    except:
+                        data[tmp]=1
+                    #data.append(tmp)
 
             # Return result
             pypar.send((W,data), destination=0)

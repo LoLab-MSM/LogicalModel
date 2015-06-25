@@ -5,6 +5,7 @@ cimport cython
 
 DTYPE = np.int  
 ctypedef np.int_t DTYPE_t 
+@cython.boundscheck(False)
 def changebase(number,numNodes,numStates):
     cdef int counter = -1
     cdef int Number = number
