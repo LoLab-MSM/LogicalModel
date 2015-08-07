@@ -86,7 +86,7 @@ def compile_cython_code(model_file, overwrite=False):
             line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
         outstring += '\t%s\n' % line
     #outstring += '\tvector = np.fmod(vector,%d)\n\treturn vector\n' %  numStates
-    outstring += '\tfor i in xrange(%d):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector\n' %  (numNodes,numStates)
+    outstring += '\tfor i in xrange(%d):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector,tuple(vector)\n' %  (numNodes,numStates)
     pyxfile.write(outstring)
     pyxfile.close()
     #os.system('sleep 2s')
@@ -105,46 +105,59 @@ def compile_cython_code(model_file, overwrite=False):
     function = import_module(prefix).function
 
 
-Where = np.where
-All = np.all
-Sort = np.sort
+
 #@profile
 def run(i):
-    x = np.zeros((1,numNodes),dtype=int)
-    x[0,:]=changebase(i,numNodes,numStates)
-    path = set()
-    loc =tuple(x[0])
-    path.add(loc)
-    tmp =function(x.reshape(numNodes))
-    while not tuple(tmp) in path:
-        path.add(tuple(tmp))
-        tmp =function(tmp)
-    path = set()
-    path.add(tuple(tmp))
-    tmp =function(tmp)
-    while not tuple(tmp) in path:
-        path.add(tuple(tmp))
-        tmp =function(tmp)
-    
+    x = changebase(i,numNodes,numStates)
+    path = set(tuple(x))
+    tmp,tmp2 = function(x)
+    while not tmp2 in path:
+        path.add(tmp2)
+        tmp,tmp2 = function(tmp)
+    path = set(tmp2)
+    tmp,tmp2 = function(tmp)
+    while not tmp2 in path:
+        path.add(tmp2)
+        tmp,tmp2 = function(tmp)
     return path.pop()
+import multiprocessing as mp
 #@profile
-def main1():
+def main():
     print 'Started '
     start_time = time.time()
     data = dict()
     compile_cython_code(Model, overwrite=False)
+    pool = mp.Pool(2)
+    a = xrange(start,end)
+    b = pool.map(run,a)
+    pool.close()
     
-    for i in xrange(start,end):
-        tmp=run(i)
+    for i in b:
         try:
-            data[tmp]+=1
+            data[i] += 1
         except:
-            data[tmp]=1
+            data[i] = 1
     endT = time.time()
     print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
+def main1():
+    print 'Started '
+    start_time = time.time()
+    data = dict()
+    compile_cython_code(Model, overwrite=False)
+    for i in xrange(start,end):
+        tmp = run(i)
+        try:
+            data[tmp] += 1
+        except:
+            data[tmp] = 1
+    endT = time.time()
+    print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
+    print 'Attractors ',data.keys()
+    print 'Frequencies ',data.values()
+    print 'Total ',np.sum(data.values())    
 if args.model == None:
     #Model = 'Models/func_example.txt'
     Model = 'Models/core_iron_6variables_3states.txt'
@@ -152,30 +165,31 @@ if args.model == None:
 else:
     Model = str(args.model)
 get_num_nodes(Model)
-blank = np.empty((numStates**9,numNodes), dtype=int)
+
 if args.start != None:
     start = int(args.start)
 else:
     start = 0
+
 if args.end != None:
     end = int(args.end)
 else:
     end = numStates**numNodes
+
 if args.parallel != None:
     parallel = int(args.parallel)
 else:
     parallel = 0
+    
 if args.verbose != None:
     v = int(args.verbose)
 else:
     v = 0
 samplesize = end - start
-global ncols,dtype
-ncols = numNodes
-dtype = [('', '<i8')] * ncols
+
 if parallel == False:
     #print "Running on single CPU"
-    main1()
+    main()
     #profile.run('main()',sort=2)
 if parallel == True:
     import pypar
@@ -187,7 +201,9 @@ if parallel == True:
     P = pypar.size()
     p = pypar.rank()
     processor_name = pypar.get_processor_name()
+    
     # Block stepping
+    
     stepping = 1000
     dir,file = os.path.split(Model)
     prefix = file.split('.')[0]
