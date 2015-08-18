@@ -108,13 +108,17 @@ def compile_cython_code(model_file, overwrite=False):
 
 #@profile
 def run(i):
+    
     x = changebase(i,numNodes,numStates)
-    path = set(tuple(x))
+    loc = tuple(x)
+    path = set()
+    path.add(loc)
     tmp,tmp2 = function(x)
     while not tmp2 in path:
         path.add(tmp2)
         tmp,tmp2 = function(tmp)
-    path = set(tmp2)
+    path = set()
+    path.add(tmp2)
     tmp,tmp2 = function(tmp)
     while not tmp2 in path:
         path.add(tmp2)
@@ -126,7 +130,7 @@ def main():
     print 'Started '
     start_time = time.time()
     data = dict()
-    compile_cython_code(Model, overwrite=False)
+    compile_cython_code(Model, overwrite=True)
     pool = mp.Pool(2)
     a = xrange(start,end)
     b = pool.map(run,a)
@@ -189,7 +193,7 @@ samplesize = end - start
 
 if parallel == False:
     #print "Running on single CPU"
-    main()
+    main1()
     #profile.run('main()',sort=2)
 if parallel == True:
     import pypar
