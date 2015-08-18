@@ -130,11 +130,12 @@ def main():
     print 'Started '
     start_time = time.time()
     data = dict()
-    compile_cython_code(Model, overwrite=True)
-    pool = mp.Pool(2)
+    compile_cython_code(Model, overwrite=False)
+    pool = mp.Pool()
     a = xrange(start,end)
     b = pool.map(run,a)
     pool.close()
+    pool.join()
     
     for i in b:
         try:
@@ -193,7 +194,7 @@ samplesize = end - start
 
 if parallel == False:
     #print "Running on single CPU"
-    main1()
+    main()
     #profile.run('main()',sort=2)
 if parallel == True:
     import pypar
