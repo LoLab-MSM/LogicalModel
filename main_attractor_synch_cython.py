@@ -25,8 +25,8 @@ p.add_argument("-v","--verbose",  type=str, help='if you want verbose updates (u
 p.add_argument("-p","--parallel", type=str, help='run in parallel, use 0 or 1')
 args = p.parse_args()
 
-#numStates=int(args.nstates)
-numStates=3
+numStates=int(args.nstates)
+#numStates=3
 def get_num_nodes(model_file):
 
     global numNodes
@@ -133,7 +133,7 @@ def main():
     compile_cython_code(Model, overwrite=False)
     pool = mp.Pool()
     a = xrange(start,end)
-    b = pool.map(run,a)
+    b = pool.map(run,a,100)
     pool.close()
     pool.join()
     
@@ -165,8 +165,8 @@ def main1():
     print 'Total ',np.sum(data.values())    
 if args.model == None:
     #Model = 'Models/func_example.txt'
-    Model = 'Models/core_iron_6variables_3states.txt'
-    #Model ='Models/final_continuous_model_21_nodes.txt'
+    #Model = 'Models/core_iron_6variables_3states.txt'
+    Model ='Models/final_continuous_model_21_nodes.txt'
 else:
     Model = str(args.model)
 get_num_nodes(Model)
@@ -180,7 +180,7 @@ if args.end != None:
     end = int(args.end)
 else:
     end = numStates**numNodes
-
+    #end =10000
 if args.parallel != None:
     parallel = int(args.parallel)
 else:
@@ -209,7 +209,7 @@ if parallel == True:
     
     # Block stepping
     
-    stepping = 1000
+    stepping = 100
     dir,file = os.path.split(Model)
     prefix = file.split('.')[0]
     if p == 0:
@@ -246,9 +246,9 @@ if parallel == True:
             data,status= pypar.receive(pypar.any_source,return_status=True)
             for tmp in data[1]:     # check to see if new states are already present
                 if tmp in Results:
-                    Results[tmp]+=1
+                    Results[tmp]+=data[1][tmp]
                 else:
-                    Results[tmp]=1
+                    Results[tmp]=data[1][tmp]
             d = status.source  # Id of slave that just finished
             if w < len(workpool):
                 # Send new work to slave d
@@ -274,13 +274,12 @@ if parallel == True:
                 else:
                     if v == 1:
                         print str(W+i+1),'/',end
-                    tmp = run(v)
+                    tmp = run(W+i)
                     try:
                         data[tmp]+=1
                     except:
                         data[tmp]=1
                     #data.append(tmp)
-
             # Return result
             pypar.send((W,data), destination=0)
     pypar.finalize()
