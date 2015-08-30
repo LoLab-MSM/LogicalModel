@@ -8,7 +8,7 @@ ctypedef np.int_t DTYPE_t
 @cython.boundscheck(False)
 def changebase(number,numNodes,numStates):
     cdef int counter = -1
-    cdef int Number = number
+    cdef long Number = number
     cdef int NumNodes = numNodes
     cdef int NumStates = numStates
     cdef np.ndarray[DTYPE_t, ndim=1] state = np.zeros([numNodes],dtype=int)
