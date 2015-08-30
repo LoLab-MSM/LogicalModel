@@ -12,7 +12,7 @@ def changebase(number,numNodes,numStates):
     cdef int NumNodes = numNodes
     cdef int NumStates = numStates
     cdef np.ndarray[DTYPE_t, ndim=1] state = np.zeros([numNodes],dtype=int)
-    cdef int quotient = np.int(Number/NumStates)
+    cdef long quotient = np.int(Number/NumStates)
     cdef int remainder = Number % NumStates
     Number = quotient
     state[counter] = remainder
