@@ -51,10 +51,10 @@ def compile_cython_code(model_file, overwrite=False):
     if os.path.exists(prefix+'.so'):
         warning_string = 'Shared object file \'%s\' already exists: ' % (prefix+'.so')
         if overwrite:
-            warnings.warn(warning_string + 'overwriting file.')
+            #warnings.warn(warning_string + 'overwriting file.')
             os.remove(prefix+'.so')
         else:
-            warnings.warn(warning_string + 'moving on.')
+            #warnings.warn(warning_string + 'moving on.')
             function = import_module(prefix).function
             return
 
@@ -116,14 +116,14 @@ def return_attractor(point,G):
     path = set()
     tmp,tmp2 = function(np.array(point))
     x = str(tmp2).replace(',','').replace('(','').replace(')','').replace(' ','')
-    print point,
+    print x,
     while not tmp2 in path:
         path.add(tmp2)
         tmp,tmp2 = function(tmp)
         y = str(tmp2).replace(',','').replace('(','').replace(')','').replace(' ','')
-        G.add_edge(x,y)
+        #G.add_edge(x,y)
         x = y
-        print '->',tmp2,
+        print '->',y,
     
     print 
     return path.pop()
@@ -150,7 +150,7 @@ def run(i):
 import multiprocessing as mp
 #@profile
 def main():
-    print 'Started '
+    #print 'Started '
     start_time = time.time()
     data = dict()
     compile_cython_code(Model, overwrite=True)
@@ -166,13 +166,14 @@ def main():
         except:
             data[i] = 1
     endT = time.time()
+    print 'start = %s, end = %s'%(start,end)
     print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
-    print 'Attractors ',data.keys()
+    #print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
 #@profile    
 def main1():
-    print 'Started '
+    #print 'Started '
     start_time = time.time()
     data = dict()
     compile_cython_code(Model, overwrite=False)
@@ -183,10 +184,11 @@ def main1():
         except:
             data[tmp] = 1
     endT = time.time()
+    print 'start = %s, end = %s'%(start,end)
     print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
-    #G = pyg.AGraph(directed=True)
-    #for i in data.keys():
-    #    return_attractor(i,G)
+    G = pyg.AGraph(directed=True)
+    for i in data.keys():
+        return_attractor(i,G)
     #G.draw('%s.pdf'%str('attractors3'),prog='dot')
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
@@ -207,8 +209,8 @@ else:
 if args.end != None:
     end = int(args.end)
 else:
-    #end = numStates**numNodes
-    end =10000
+    end = numStates**numNodes
+    #end =10000
 if args.parallel != None:
     parallel = int(args.parallel)
 else:
@@ -222,9 +224,9 @@ samplesize = end - start
 
 if parallel == False:
     #print "Running on single CPU"
-    #main1()
-    import profile
-    profile.run('main1()',sort=2)
+    main1()
+    #import profile
+    #profile.run('main1()',sort=2)
 if parallel == True:
     import pypar
     # Must have pypar installed, uses a "stepping" of 100, which means splits up
