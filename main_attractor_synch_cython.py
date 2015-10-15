@@ -15,6 +15,7 @@ import re
 import os
 import warnings
 from changeBase import changebase
+from changeBase import run
 import multiprocessing as mp
 p = argparse.ArgumentParser()
 p.add_argument("-n","--nstates",  type=str, help='provide a number of states')
@@ -25,8 +26,8 @@ p.add_argument("-v","--verbose",  type=str, help='if you want verbose updates (u
 p.add_argument("-p","--parallel", type=str, help='run in parallel, use 0 or 1')
 args = p.parse_args()
 
-numStates=int(args.nstates)
-#numStates=3
+#numStates=int(args.nstates)
+numStates=3
 def get_num_nodes(model_file):
 
     global numNodes
@@ -60,16 +61,20 @@ def compile_cython_code(model_file, overwrite=False):
     pyxfile = open(prefix+'.pyx','w')
 
     outstring = \
-    'from __future__ import division\
+    '# cython: profile=True\
+    \nfrom __future__ import division\
     \nimport numpy as np\
     \ncimport numpy as np\
     \ncimport cython\
     \n\nDTYPE = np.int\
     \nctypedef np.int_t DTYPE_t\
     \n@cython.boundscheck(False)\
-    \ndef function(np.ndarray[DTYPE_t, ndim=1] x):\
+    \n@cython.wraparound(False)\
+    \ndef function(object[DTYPE_t, ndim=1, mode="c"] x not None):\
     \n\tcdef unsigned int vectorsize = %d\
     \n\tcdef np.ndarray[DTYPE_t, ndim=1] vector = np.zeros([vectorsize],dtype=int)\n'%numNodes
+    #for i in range(numNodes):
+    #    outstring+='\tcdef unsigned int  X%s = x[%s]\n'%(str(i),str(i))
     for line in functions:
         # Replace function name
         line = re.sub('f\d+', 'vector[%d]' % (int(re.match('f(\d+)', line).group(1))-1), line)
@@ -83,7 +88,7 @@ def compile_cython_code(model_file, overwrite=False):
         # Replace node names
         matches = np.array(re.findall('x(\d+)', line), dtype=int)
         for m in matches:
-            line = re.sub('x\d+', 'x[%d]' % (m-1), line, count=1)
+            line = re.sub('x\d+', 'x[<unsigned int>%d]' % (m-1), line, count=1)
         outstring += '\t%s\n' % line
     #outstring += '\tvector = np.fmod(vector,%d)\n\treturn vector\n' %  numStates
     outstring += '\tfor i in xrange(%d):\n\t\tvector[i] = vector[i]%%%d\n\treturn vector,tuple(vector)\n' %  (numNodes,numStates)
@@ -104,8 +109,24 @@ def compile_cython_code(model_file, overwrite=False):
     sys.path.append(dir)
     function = import_module(prefix).function
 
+import pygraphviz as pyg
 
-
+def return_attractor(point,G):
+    
+    path = set()
+    tmp,tmp2 = function(np.array(point))
+    x = str(tmp2).replace(',','').replace('(','').replace(')','').replace(' ','')
+    print point,
+    while not tmp2 in path:
+        path.add(tmp2)
+        tmp,tmp2 = function(tmp)
+        y = str(tmp2).replace(',','').replace('(','').replace(')','').replace(' ','')
+        G.add_edge(x,y)
+        x = y
+        print '->',tmp2,
+    
+    print 
+    return path.pop()
 #@profile
 def run(i):
     
@@ -117,20 +138,22 @@ def run(i):
     while not tmp2 in path:
         path.add(tmp2)
         tmp,tmp2 = function(tmp)
-    path = set()
+
+    path = set()    
     path.add(tmp2)
     tmp,tmp2 = function(tmp)
     while not tmp2 in path:
         path.add(tmp2)
         tmp,tmp2 = function(tmp)
     return path.pop()
+
 import multiprocessing as mp
 #@profile
 def main():
     print 'Started '
     start_time = time.time()
     data = dict()
-    compile_cython_code(Model, overwrite=False)
+    compile_cython_code(Model, overwrite=True)
     pool = mp.Pool()
     a = xrange(start,end)
     b = pool.map(run,a,100)
@@ -147,6 +170,7 @@ def main():
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())
+#@profile    
 def main1():
     print 'Started '
     start_time = time.time()
@@ -160,6 +184,10 @@ def main1():
             data[tmp] = 1
     endT = time.time()
     print 'Computed %s samples %.4f minutes' %(str(samplesize),(endT - start_time)/60)
+    #G = pyg.AGraph(directed=True)
+    #for i in data.keys():
+    #    return_attractor(i,G)
+    #G.draw('%s.pdf'%str('attractors3'),prog='dot')
     print 'Attractors ',data.keys()
     print 'Frequencies ',data.values()
     print 'Total ',np.sum(data.values())    
@@ -179,8 +207,8 @@ else:
 if args.end != None:
     end = int(args.end)
 else:
-    end = numStates**numNodes
-    #end =10000
+    #end = numStates**numNodes
+    end =10000
 if args.parallel != None:
     parallel = int(args.parallel)
 else:
@@ -194,8 +222,9 @@ samplesize = end - start
 
 if parallel == False:
     #print "Running on single CPU"
-    main()
-    #profile.run('main()',sort=2)
+    #main1()
+    import profile
+    profile.run('main1()',sort=2)
 if parallel == True:
     import pypar
     # Must have pypar installed, uses a "stepping" of 100, which means splits up
